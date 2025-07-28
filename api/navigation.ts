@@ -123,7 +123,7 @@ export default async function handler(req: any, res: any) {
   const result = findShortestPath(coordinates, startPosition, endPosition);
   // Check for error
   if (typeof result == "string") {
-    return res.status(400).json({ error: result });
+    return res.status(400).json({ error: result, start: startPosition, end: endPosition});
   }
 
   const response = convertToObject(result);
