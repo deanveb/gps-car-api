@@ -7,6 +7,11 @@ interface IQueue<T> {
   size(): number;
 }
 
+interface doDuongResponse {
+  distance: number;
+  direction: "trai" | "phai" | "thang";
+}
+
 class Queue<T> implements IQueue<T> {
   storage: T[] = [];
 
@@ -30,8 +35,8 @@ class Queue<T> implements IQueue<T> {
 }
 
 interface connectedNode {
-  coord : coordinate;
-  weight : number;
+  coord: coordinate;
+  weight: number;
 }
 
 class coordinate {
@@ -46,17 +51,20 @@ class coordinate {
     this.position = position;
   }
 
-  calculateWeight(from : coordinate, to : coordinate) {
-    return Math.abs(to.position[0] - from.position[0]) + Math.abs(to.position[1] - from.position[1]);
+  calculateWeight(from: coordinate, to: coordinate) {
+    return (
+      Math.abs(to.position[0] - from.position[0]) +
+      Math.abs(to.position[1] - from.position[1])
+    );
   }
 
   connectTo(coords: Array<coordinate>) {
-    let result : Array<connectedNode> = []; 
+    let result: Array<connectedNode> = [];
 
     coords.forEach((coord) => {
       result.push({
         coord: coord,
-        weight: this.calculateWeight(this, coord)
+        weight: this.calculateWeight(this, coord),
       });
     });
 
@@ -64,25 +72,117 @@ class coordinate {
   }
 }
 
+class vector {
+  value: Array<number>;
+
+  constructor(value: Array<number> = [0, 0]) {
+    this.value = value;
+  }
+
+  subtract(a: Array<number>) {
+    this.value = [this.value[0] - a[0], this.value[1] - a[1]];
+    return this.value;
+  }
+
+  normalize() {
+    this.value = this.value.map((num) => {
+      if (num > 0) {
+        return 1;
+      } else if (num < 0) {
+        return -1
+      }
+      return 0;
+    });
+    
+  }
+
+  reverse() {
+    const temp = this.value[0];
+    this.value[0] = this.value[1];
+    this.value[1] = temp;
+  }
+}
+
 export default async function handler(req: any, res: any) {
   /*
 		Map:
-    0M0N1O00
-    0K1J00C0
-    0L010IH0
+    0A0B1C00
+    0D1E00F0
+    0G010HI0
     00010010
-    BA1C11G0
+    RJ1K11L0
     01010000
-    0A0DE1B0
-    0000F000
+    0M0NO1P0
+    0000Q000
 	*/
   const coordinates: Array<coordinate> = generateGraph();
   console.log(req.query.start, " ", req.query.end);
   const startPosition = [3, 2];
   const endPosition = [2, 0];
 
-  // check if start and end is valid if not return error json
-  // run a*
+  const result = findShortestPath(coordinates, startPosition, endPosition);
+  // Check for error
+  if (typeof result == "string") {
+    return res.status(400).json({ error: result });
+  }
+
+  const response = convertToObject(result);
+  return res.status(200).json(response);
+}
+
+/** 
+ * convertToObject's helper function
+ * NOTE: this code will only work if the road is a straight line.Not on a diagonal road
+ */
+function getDirection(
+  vectorPrev: vector,
+  vectorNext: vector
+): "trai" | "phai" | "thang" {
+  // Will break if the starting point branch off into multiple path
+  if (!vectorPrev.value) {
+    return "thang";
+  }
+
+  vectorPrev.normalize();
+  console.log(vectorPrev.value);
+  
+  vectorPrev.reverse();
+  vectorNext.normalize();
+  const compareValue: Array<number> = [
+    vectorPrev.value[0] > 0 ? vectorPrev.value[0] : vectorPrev.value[1],
+    vectorNext.value[0] > 0 ? vectorNext.value[0] : vectorNext.value[1],
+  ];
+
+  // console.log(-compareValue[0]);
+  if (-compareValue[0] == compareValue[1]) {
+    return "trai"
+  } else if (compareValue[0] == compareValue[1]) {
+    return "phai"
+  } else {
+    return "thang"
+  }
+}
+
+/** convert into a response object to send back to client */
+function convertToObject(coords: Array<coordinate>): Array<doDuongResponse> {
+  const result = new Array<doDuongResponse>();
+  let prevVectorDistance = new vector(undefined);
+  const canhVuong = 25; // (cm)
+
+  for (let i = 0; i < coords.length - 1; i++) {
+    const current = new vector(coords[i + 1].position);
+    const vectorDistance = current.subtract(coords[i].position);
+    result.push({
+      distance:
+        canhVuong * vectorDistance[0] > 0
+          ? vectorDistance[0]
+          : vectorDistance[1],
+      direction: getDirection(prevVectorDistance, new vector(vectorDistance)),
+    });
+    prevVectorDistance = new vector(vectorDistance);
+  }
+
+  return result;
 }
 
 /** Find the corresponding coordinate with the given position */
@@ -140,16 +240,18 @@ function aStar(
       smallestCost(availableConnections.storage)
     );
     node.visited = true;
+    // console.log(node.position);
 
     // if the current node is the goal then terminate
     if (node.position.toString() === end.toString()) {
       const traveled = new Array<coordinate>();
 
-      // backtracking
       do {
         traveled.push(node);
         node = node.previous;
       } while (node.previous);
+      // to push the start node
+      traveled.push(node);
 
       // if traveled is empty that means that the end node is the start node
       return traveled.reverse();
@@ -159,7 +261,8 @@ function aStar(
       // FIXME: "includes" might break because coord is an object
       if (!connection.coord.visited) {
         connection.coord.previous = node;
-        connection.coord.totalCost = connection.coord.distance + node.totalCost + connection.weight;
+        connection.coord.totalCost =
+          connection.coord.distance + node.totalCost + connection.weight;
         availableConnections.enqueue(connection.coord);
       }
     });
@@ -171,7 +274,10 @@ function findShortestPath(
   start: Array<number>,
   end: Array<number>
 ): Array<coordinate> | string {
-  if (!findCoordinate(coordinates, start) || !findCoordinate(coordinates, end)) {
+  if (
+    !findCoordinate(coordinates, start) ||
+    !findCoordinate(coordinates, end)
+  ) {
     return "Start or end is not found";
   }
   // get the coordnate object with the start position
@@ -187,25 +293,57 @@ function findShortestPath(
 }
 
 function generateGraph(): Array<coordinate> {
-  const A = new coordinate([6, 1]);
-  const B = new coordinate([4, 0]);
-  const C = new coordinate([4, 3]);
-  const D = new coordinate([6, 2]);
-  const E = new coordinate([6, 3]);
-  const F = new coordinate([7, 4]);
-  const G = new coordinate([4, 6]);
-  const H = new coordinate([2, 6]);
-  const I = new coordinate([2, 5]);
-  const J = new coordinate([1, 3]);
-  const K = new coordinate([1, 1]);
-  const L = new coordinate([2, 1]);
-  const M = new coordinate([0, 1]);
-  const N = new coordinate([0, 2]);
-  const O = new coordinate([0, 3]);
+  const A = new coordinate([0, 1]);
+  const B = new coordinate([0, 3]);
+  const C = new coordinate([0, 5]);
+  const D = new coordinate([1, 1]);
+  const E = new coordinate([1, 3]);
+  const F = new coordinate([1, 6]);
+  const G = new coordinate([2, 1]);
+  const H = new coordinate([2, 5]);
+  const I = new coordinate([2, 6]);
+  const J = new coordinate([4, 1]);
+  const K = new coordinate([4, 3]);
+  const L = new coordinate([4, 6]);
+  const M = new coordinate([6, 1]);
+  const N = new coordinate([6, 3]);
+  const O = new coordinate([6, 4]);
+  const P = new coordinate([6, 6]);
+  const Q = new coordinate([7, 4]);
+  const R = new coordinate([4, 0]);
 
-  
+  A.connectTo([D]);
+  B.connectTo([E, C]);
+  C.connectTo([B]);
+  D.connectTo([A, G, E]);
+  E.connectTo([B, D, K]);
+  F.connectTo([I]);
+  G.connectTo([D]);
+  H.connectTo([I]);
+  I.connectTo([L, H, F]);
+  R.connectTo([J]);
+  J.connectTo([R, M, K]);
+  K.connectTo([J, L, N]);
+  L.connectTo([I, K]);
+  M.connectTo([J]);
+  N.connectTo([K, O]);
+  O.connectTo([N, Q, P]);
+  P.connectTo([O]);
+  Q.connectTo([O]);
 
-  return [A, B, C, D, E, F, G, H, I, G, J, K, L, M, N, O];
+  return [A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q];
 }
 
-export {coordinate, connectedNode, assignDistance, smallestCost, findShortestPath, findCoordinate, aStar, generateGraph };
+export {
+  coordinate,
+  connectedNode,
+  assignDistance,
+  smallestCost,
+  findShortestPath,
+  findCoordinate,
+  aStar,
+  generateGraph,
+  getDirection,
+  convertToObject,
+  vector,
+};
