@@ -116,9 +116,9 @@ export default async function handler(req: any, res: any) {
     0000Q000
 	*/
   const coordinates: Array<coordinate> = generateGraph();
-  console.log(req.query, " ", req.query);
-  const startPosition = [6, 1];
-  const endPosition = [6, 5];
+  // console.log(req.query, " ", req.query);
+  const startPosition = [req.query.start0, req.query.start1];
+  const endPosition = [req.query.end0, req.query.end1];
 
   const result = findShortestPath(coordinates, startPosition, endPosition);
   // Check for error
