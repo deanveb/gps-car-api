@@ -116,7 +116,7 @@ export default async function handler(req: any, res: any) {
     0000Q000
 	*/
   const coordinates: Array<coordinate> = generateGraph();
-  console.log(req.query.start, " ", req.query.end);
+  console.log(req.query, " ", req.query);
   const startPosition = [3, 2];
   const endPosition = [2, 0];
 
