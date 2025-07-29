@@ -75,13 +75,12 @@ class coordinate {
 class vector {
   value: Array<number>;
 
-  constructor(value: Array<number> = [0, 0]) {
+  constructor(value: Array<number>) {
     this.value = value;
   }
 
   subtract(a: Array<number>) {
-    this.value = [this.value[0] - a[0], this.value[1] - a[1]];
-    return this.value;
+    return [this.value[0] - a[0], this.value[1] - a[1]];
   }
 
   normalize() {
@@ -139,25 +138,34 @@ function getDirection(
   vectorNext: vector
 ): "trai" | "phai" | "thang" {
   // Will break if the starting point branch off into multiple path
-  if (!vectorPrev.value) {
+  console.log(vectorPrev.value, vectorNext.value);
+  if (vectorPrev.value == undefined) {
     return "thang";
   }
 
   vectorPrev.normalize();
-  console.log(vectorPrev.value);
-  
-  vectorPrev.reverse();
   vectorNext.normalize();
-  const compareValue: Array<number> = [
-    vectorPrev.value[0] > 0 ? vectorPrev.value[0] : vectorPrev.value[1],
-    vectorNext.value[0] > 0 ? vectorNext.value[0] : vectorNext.value[1],
-  ];
+
+  // Up, Right, Down, Left
+  const direction = new Map();
+  direction.set("[-1,0]", -90);
+  direction.set("[0,1]", 0);
+  direction.set("[1,0]", 90);
+  direction.set("[0,-1]", 180);
+
+  // Source: goc luong giac
+  // console.log(direction.get(JSON.stringify(vectorPrev.value)), "hi",direction.get(JSON.stringify(vectorNext.value)));
+  let result = (direction.get(JSON.stringify(vectorPrev.value)) - direction.get(JSON.stringify(vectorNext.value)))
+  // console.log("trc:",result);
+  result = Math.abs(result) == 270 ? (result > 0 ? -90 : 90) : result;
+  // console.log("sau:",result);
+  
 
   // console.log(-compareValue[0]);
-  if (-compareValue[0] == compareValue[1]) {
-    return "trai"
-  } else if (compareValue[0] == compareValue[1]) {
+  if (result == -90) {
     return "phai"
+  } else if (result == 90) {
+    return "trai"
   } else {
     return "thang"
   }
@@ -170,13 +178,14 @@ function convertToObject(coords: Array<coordinate>): Array<doDuongResponse> {
   const canhVuong = 25; // (cm)
 
   for (let i = 0; i < coords.length - 1; i++) {
-    const current = new vector(coords[i + 1].position);
-    const vectorDistance = current.subtract(coords[i].position);
+    const destination = new vector(coords[i + 1].position);
+    const vectorDistance = destination.subtract(coords[i].position);
+    // console.log("distance vector:", vectorDistance);
     result.push({
       distance:
-        canhVuong * vectorDistance[0] > 0
-          ? vectorDistance[0]
-          : vectorDistance[1],
+        canhVuong * (Math.abs(vectorDistance[0]) > 0
+          ? Math.abs(vectorDistance[0])
+          : Math.abs(vectorDistance[1])),
       direction: getDirection(prevVectorDistance, new vector(vectorDistance)),
     });
     prevVectorDistance = new vector(vectorDistance);
@@ -346,4 +355,5 @@ export {
   getDirection,
   convertToObject,
   vector,
+  doDuongResponse,
 };
